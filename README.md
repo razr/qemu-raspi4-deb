@@ -63,19 +63,18 @@ QEMU_REF=<commit-or-branch> bash scripts/build-deb.sh
 
 ## CI
 
-`.github/workflows/build-deb.yaml` — native build on both `ubuntu-24.04`
-(amd64) and `ubuntu-24.04-arm` (arm64) runners (no container, no cross/emulation):
+`.github/workflows/build-deb.yaml` — native build on the `ubuntu-24.04` runner
+(no container):
 
 * **workflow_dispatch** — build on demand (optionally pick a `razr/qemu` ref).
 * **push tag `v*`** — build and attach the `.deb` to a GitHub Release.
 
 ### Artifacts produced
 
-* **Build artifacts** `qemu-raspi4-deb-amd64` and `qemu-raspi4-deb-arm64` — the
-  per-arch `out/*.deb` (`qemu-raspi4_<ver>+raspi4genet.<sha>_<arch>.deb`),
-  downloadable from the run's Artifacts section. The arm64 `.deb` runs raspi4b
-  guests same-arch on an arm64 host (KVM-capable if /dev/kvm is present).
-* On a **`v*` tag**: both `.deb`s are also attached to the **GitHub Release**.
+* **Build artifact** `qemu-raspi4-deb` — the `out/*.deb`
+  (`qemu-raspi4_<ver>+raspi4genet.<sha>_amd64.deb`), downloadable from the run's
+  Artifacts section.
+* On a **`v*` tag**: the `.deb` is also attached to the **GitHub Release**.
 * The run log prints the package metadata (`dpkg-deb -f`) and contents
   (`dpkg-deb -c`).
 
@@ -119,4 +118,4 @@ qemu-system-aarch64-raspi4 -machine raspi4b -m 2048 \
 |-------|-------|
 | QEMU source | `razr/qemu` branch `genet-rebased-sd` (`VERSION` 11.0.90) |
 | Target | `aarch64-softmmu` only |
-| Build hosts | `ubuntu-24.04` (amd64) + `ubuntu-24.04-arm` (arm64), native |
+| Build host | `ubuntu-24.04` (native) |
