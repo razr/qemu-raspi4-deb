@@ -1,9 +1,8 @@
 # qemu-raspi4-deb
 
-Builds a Debian/Ubuntu `.deb` of a **patched QEMU** that fixes Raspberry Pi 4
-(`raspi4b` / BCM2838) board emulation, by reusing Debian's maintained QEMU
-packaging on top of the [`razr/qemu`](https://github.com/razr/qemu) fork
-(branch `genet-rebased-sd`).
+Builds a `.deb` of a **patched QEMU** that fixes Raspberry Pi 4 (`raspi4b` /
+BCM2838) board emulation, from the
+[`razr/qemu`](https://github.com/razr/qemu) fork (branch `genet-rebased-sd`).
 
 These are **board-emulation fixes, not guest-OS specific** — any aarch64 guest on
 QEMU's `raspi4b` machine benefits:
@@ -19,67 +18,104 @@ rebased onto QEMU 11.1-dev (`VERSION` = `11.0.90`).
 
 Upstream and distro QEMU don't yet carry these raspi4b fixes, and the model
 targets recent QEMU APIs (11.x) — it does **not** back-port to the QEMU 8.2 that
-Ubuntu 24.04 ships. So we build the fork's source with a real
-`dpkg-buildpackage`, reusing Debian's packaging rather than hand-writing one.
+Ubuntu 24.04 ships. So we build the fork's source directly.
 
-## How it works (no hand-written `debian/`)
+## What it builds
+
+A single-target, lean package:
+
+* Builds **only `qemu-system-aarch64`** (the raspi4b emulator) — no other targets,
+  no test suite.
+* Installs **only the emulator binary** under `/opt/qemu-raspi4/bin/`, plus a
+  `/usr/bin/qemu-system-aarch64-raspi4` symlink on `PATH`. No bundled firmware,
+  keymaps, or extra tools — raspi4b boots a kernel directly (`-kernel` + `-dtb`)
+  and needs none of it.
+* Does **not** shadow the distro's own `qemu-system-aarch64`.
+
+Package: `qemu-raspi4`, version `<qemu-version>+raspi4genet.<short-sha>`
+(e.g. `11.0.90+raspi4genet.c1359c9`).
+
+## How it works (no hand-maintained upstream packaging)
 
 `scripts/build-deb.sh`:
 
-1. Clones the patched source: `razr/qemu @ genet-rebased-sd` (with submodules, so
-   the firmware ROMs are present and Debian's quilt patches apply).
-2. Overlays Debian's `debian/` packaging from
-   [salsa qemu-team](https://salsa.debian.org/qemu-team/qemu) branch
-   `experimental` — which tracks QEMU **11.1**, matching the fork's `11.0.90`.
-3. Bumps `debian/changelog` with a `+raspi4genet` local version (recording the
-   source commit). No other `debian/` edits — Debian's rules build the full,
-   tested target set.
-4. Runs `dpkg-buildpackage -b` → standard QEMU `.deb`s (`qemu-system-arm`, …).
+1. Clones the patched source: `razr/qemu @ genet-rebased-sd` (no submodules — a
+   single aarch64 target needs no bundled firmware ROMs).
+2. Drops in this repo's minimal `debian/` (control + rules), generates a
+   `debian/changelog` recording the source commit.
+3. Runs `dpkg-buildpackage -b`. Configure is the verified minimal recipe:
+   `--target-list=aarch64-softmmu --disable-docs --enable-slirp`
+   (meson auto-pulls the bundled pixman/slirp subprojects — no `-dev` libs).
+   Runtime `Depends:` are computed automatically by `dpkg-shlibdeps`.
 
-Because the package **keeps Debian's names/versions** (e.g.
-`1:11.1.0~rc3+ds-2+raspi4genet1`), it's a drop-in: installing it provides a
-`qemu-system-aarch64` with the raspi4b fixes.
-
-## Build locally
+## Build locally (Ubuntu 24.04)
 
 ```bash
-# In an ubuntu-24.04 / debian / eLxr environment (or container):
 bash scripts/build-deb.sh
-# -> .deb(s) in ./out/
+# -> .deb in ./out/
 ```
 
-Override the source ref or Debian packaging branch via env:
+Override the source ref:
 
 ```bash
-QEMU_REF=<commit> DEBIAN_REF=experimental bash scripts/build-deb.sh
+QEMU_REF=<commit-or-branch> bash scripts/build-deb.sh
 ```
 
 ## CI
 
-`.github/workflows/build-deb.yaml`:
+`.github/workflows/build-deb.yaml` — native build on the `ubuntu-24.04` runner
+(no container):
 
-* **workflow_dispatch** — build on demand; choose the container distro
-  (`ubuntu-24.04` default, `debian-trixie`, `elxr`) and optionally a `razr/qemu`
-  ref.
-* **push tag `v*`** — build all distros and attach the `.deb`(s) to a GitHub
-  Release.
+* **workflow_dispatch** — build on demand (optionally pick a `razr/qemu` ref).
+* **push tag `v*`** — build and attach the `.deb` to a GitHub Release.
+
+### Artifacts produced
+
+* **Build artifact** `qemu-raspi4-deb` — the `out/*.deb`
+  (`qemu-raspi4_<ver>+raspi4genet.<sha>_amd64.deb`), downloadable from the run's
+  Artifacts section. Retained per the repo's default artifact retention.
+* On a **`v*` tag**: the same `.deb` is also attached to the **GitHub Release**.
+* The run log prints the package metadata (`dpkg-deb -f`) and contents
+  (`dpkg-deb -c`).
 
 ## Consume
 
 ```bash
-sudo apt-get install -y ./qemu-system-arm_*+raspi4genet1_*.deb
-# qemu-system-aarch64 now carries the raspi4b GENET + SD fixes.
+sudo apt-get install -y ./qemu-raspi4_*_amd64.deb
+# the patched emulator is now at:
+#   /opt/qemu-raspi4/bin/qemu-system-aarch64
+#   /usr/bin/qemu-system-aarch64-raspi4   (symlink on PATH)
 ```
 
-Downstream consumers point their QEMU-path env at it:
+Any tool that runs a `raspi4b` guest points its QEMU-path setting at it, e.g.:
 
-* VxWorks ROS 2 test harness: `VX_QEMU=$(command -v qemu-system-aarch64)`
-* qemu-mcp: `QEMU_RASPI4_BIN=$(command -v qemu-system-aarch64)`
+```bash
+QEMU=$(command -v qemu-system-aarch64-raspi4)
+```
+
+## Validation (what the patches fix)
+
+Validate SD + Ethernet with any aarch64 raspi4b guest (Raspberry Pi OS arm64
+and/or a VxWorks raspi4b image). Boot with the stock dtb and `-append`:
+
+```bash
+qemu-system-aarch64-raspi4 -machine raspi4b -m 2048 \
+  -kernel <kernel> -dtb <rpi-4b.dtb> -append "<boot args>" \
+  -nic tap,ifname=tap0,model=bcm2838-genet,script=no,downscript=no \
+  -sd <disk.img> -serial null -serial mon:stdio -display none
+```
+
+* **SD (emmc2 routing)** — the guest enumerates the SD block device
+  (Linux: `/dev/mmcblk*`; VxWorks: `/sd0`).
+* **Ethernet (GENET)** — the NIC comes up and pings over `tap0`.
+
+> Verified: the produced `.deb`'s binary boots a VxWorks raspi4b image, mounts
+> its SD (`/sd0`), and passes a host↔target ping (0% loss) over the GENET NIC.
 
 ## Source pins
 
 | Thing | Value |
 |-------|-------|
 | QEMU source | `razr/qemu` branch `genet-rebased-sd` (`VERSION` 11.0.90) |
-| Debian packaging | salsa `qemu-team/qemu` branch `experimental` (QEMU 11.1) |
-| Default build distro | `ubuntu-24.04` (also `debian-trixie`, `elxr`) |
+| Target | `aarch64-softmmu` only |
+| Build host | `ubuntu-24.04` (native) |

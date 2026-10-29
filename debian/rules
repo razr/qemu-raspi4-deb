@@ -1,0 +1,53 @@
+#!/usr/bin/make -f
+# Minimal packaging: build ONLY qemu aarch64-softmmu (raspi4b), install under
+# /opt/qemu-raspi4, let dpkg-shlibdeps compute runtime Depends per distro.
+# The QEMU source tree is placed at the package root by debian/get-source.sh
+# (or by the build script) before dpkg-buildpackage runs.
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+
+PREFIX   := /opt/qemu-raspi4
+BUILDDIR := b-raspi4
+DESTDIR  := $(CURDIR)/debian/qemu-raspi4
+
+# One target, known-good minimal flags (from the verified build in the KB:
+#   configure --target-list=aarch64-softmmu --disable-docs --enable-slirp; ninja
+# meson auto-pulls the bundled pixman/dtc subprojects; no long --disable- list.
+CONFIGURE_FLAGS := \
+	--prefix=$(PREFIX) \
+	--target-list=aarch64-softmmu \
+	--enable-slirp \
+	--disable-docs
+
+%:
+	dh $@
+
+# QEMU's `make distclean` trips dh_auto_clean (GNUmakefile wrapper); just drop
+# our out-of-tree build dir instead.
+override_dh_auto_clean:
+	rm -rf $(BUILDDIR)
+
+override_dh_auto_configure:
+	rm -rf $(BUILDDIR); mkdir -p $(BUILDDIR)
+	cd $(BUILDDIR) && $(CURDIR)/configure $(CONFIGURE_FLAGS)
+
+override_dh_auto_build:
+	ninja -C $(BUILDDIR) qemu-system-aarch64
+
+override_dh_auto_install:
+	# raspi4b boots a kernel directly (-kernel + -dtb) and needs NONE of QEMU's
+	# bundled pc-bios firmware/data. Install ONLY the emulator binary — don't run
+	# `ninja install` (which stages firmware for every machine type).
+	mkdir -p $(DESTDIR)$(PREFIX)/bin $(DESTDIR)/usr/bin
+	install -m0755 $(BUILDDIR)/qemu-system-aarch64 $(DESTDIR)$(PREFIX)/bin/qemu-system-aarch64
+	ln -sf $(PREFIX)/bin/qemu-system-aarch64 \
+		$(DESTDIR)/usr/bin/qemu-system-aarch64-raspi4
+
+# packaging build, not QEMU CI
+override_dh_auto_test:
+
+# QEMU installs prebuilt, non-ELF firmware blobs under share/qemu (u-boot.e500,
+# openbios-*, s390-ccw.img, ...) that `strip` can't parse. Exclude the whole
+# firmware share dir from stripping; only the emulator binary needs stripping.
+override_dh_strip:
+	dh_strip --no-automatic-dbgsym -Xshare/qemu

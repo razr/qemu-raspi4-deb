@@ -1,0 +1,33 @@
+Source: qemu-raspi4
+Section: misc
+Priority: optional
+Maintainer: Andrei Kholodnyi <andrei.kholodnyi@windriver.com>
+Build-Depends:
+ debhelper-compat (= 13),
+ meson,
+ ninja-build,
+ gcc,
+ pkg-config,
+ device-tree-compiler,
+ python3:any,
+ zlib1g-dev
+Standards-Version: 4.6.2
+Homepage: https://github.com/razr/qemu-raspi4-deb
+Rules-Requires-Root: no
+
+Package: qemu-raspi4
+Architecture: amd64 arm64
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Provides: qemu-system-aarch64-raspi4
+Description: QEMU aarch64 system emulator with Raspberry Pi 4 board fixes
+ A single-target (aarch64-softmmu) build of QEMU carrying Raspberry Pi 4
+ (raspi4b / BCM2838) board-emulation fixes not yet in upstream or distro QEMU:
+ .
+  * BCM2838 GENET Ethernet model fixes (incl. TX ring-enable), so the on-board
+    NIC works under emulation.
+  * SD card routed to the emmc2 controller, so emmc2-only guests see the SD.
+ .
+ Built from the razr/qemu fork (branch genet-rebased-sd). Installed under
+ /opt/qemu-raspi4 with a qemu-system-aarch64-raspi4 symlink on PATH, so it does
+ not shadow the distro's own qemu-system-aarch64. These are board-emulation
+ fixes, not guest-OS specific.
