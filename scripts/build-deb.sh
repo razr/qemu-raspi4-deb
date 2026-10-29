@@ -31,12 +31,25 @@ $SUDO apt-get install -y --no-install-recommends \
   git curl ca-certificates build-essential debhelper devscripts libdistro-info-perl dpkg-dev fakeroot \
   meson ninja-build gcc pkg-config device-tree-compiler python3 zlib1g-dev libglib2.0-dev
 
-rm -rf "$WORKDIR"; mkdir -p "$WORKDIR" "$OUTDIR"
+mkdir -p "$WORKDIR" "$OUTDIR"
 
-log "Clone patched QEMU source: $QEMU_REPO @ $QEMU_REF (single target -> no submodules)"
-git clone "$QEMU_REPO" "$WORKDIR/qemu"
-cd "$WORKDIR/qemu"
-git checkout "$QEMU_REF"
+# Cache-friendly: reuse an existing checkout at the right ref (e.g. restored by
+# actions/cache) instead of re-cloning. Clean any stale build tree / debian dir
+# so dpkg-buildpackage starts fresh, but keep the (expensive) git checkout.
+if [ -d "$WORKDIR/qemu/.git" ]; then
+  log "Reuse cached QEMU checkout at $WORKDIR/qemu"
+  cd "$WORKDIR/qemu"
+  git fetch --depth 1 origin "$QEMU_REF" 2>/dev/null || git fetch origin 2>/dev/null || true
+  git checkout -f "$QEMU_REF" 2>/dev/null || git checkout -f "origin/$QEMU_REF" 2>/dev/null || true
+  git clean -fdx -e debian 2>/dev/null || true
+  rm -rf debian b-raspi4
+else
+  log "Clone patched QEMU source: $QEMU_REPO @ $QEMU_REF (single target -> no submodules)"
+  rm -rf "$WORKDIR/qemu"
+  git clone "$QEMU_REPO" "$WORKDIR/qemu"
+  cd "$WORKDIR/qemu"
+  git checkout "$QEMU_REF"
+fi
 SRC_SHA="$(git rev-parse --short HEAD)"
 UPSTREAM_VER="$(cat VERSION)"             # e.g. 11.0.90
 log "Source: VERSION=$UPSTREAM_VER sha=$SRC_SHA"

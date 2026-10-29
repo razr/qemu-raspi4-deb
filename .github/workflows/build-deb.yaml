@@ -35,6 +35,24 @@ jobs:
             git curl ca-certificates build-essential debhelper devscripts libdistro-info-perl dpkg-dev fakeroot \
             meson ninja-build gcc pkg-config device-tree-compiler python3 zlib1g-dev libglib2.0-dev
 
+      - name: Resolve QEMU source commit (for cache key)
+        id: qref
+        env:
+          QEMU_REF: ${{ inputs.qemu_ref || 'genet-rebased-sd' }}
+        run: |
+          SHA=$(git ls-remote https://github.com/razr/qemu "$QEMU_REF" | awk '{print $1}' | head -1)
+          [ -n "$SHA" ] || SHA="$QEMU_REF"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "QEMU source $QEMU_REF -> $SHA"
+
+      - name: Cache QEMU checkout
+        uses: actions/cache@v4
+        with:
+          path: work/qemu
+          # keyed on the resolved source commit: hit while the ref is unchanged,
+          # refetch when it moves.
+          key: qemu-src-${{ steps.qref.outputs.sha }}
+
       - name: Build .deb
         env:
           QEMU_REF: ${{ inputs.qemu_ref || 'genet-rebased-sd' }}
