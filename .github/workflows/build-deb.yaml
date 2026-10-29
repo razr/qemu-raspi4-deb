@@ -19,6 +19,11 @@ on:
     tags:
       - "v*"
 
+# Allow the tag build to attach the .deb to the GitHub Release
+# (softprops/action-gh-release needs contents: write).
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-24.04
