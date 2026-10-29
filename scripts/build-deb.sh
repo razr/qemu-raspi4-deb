@@ -29,7 +29,7 @@ $SUDO apt-get update
 # -dev libs needed). Plus the Debian packaging tooling.
 $SUDO apt-get install -y --no-install-recommends \
   git curl ca-certificates build-essential debhelper devscripts libdistro-info-perl dpkg-dev fakeroot \
-  meson ninja-build gcc pkg-config device-tree-compiler python3 zlib1g-dev
+  meson ninja-build gcc pkg-config device-tree-compiler python3 zlib1g-dev libglib2.0-dev
 
 rm -rf "$WORKDIR"; mkdir -p "$WORKDIR" "$OUTDIR"
 

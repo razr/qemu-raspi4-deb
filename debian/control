@@ -10,7 +10,8 @@ Build-Depends:
  pkg-config,
  device-tree-compiler,
  python3:any,
- zlib1g-dev
+ zlib1g-dev,
+ libglib2.0-dev
 Standards-Version: 4.6.2
 Homepage: https://github.com/razr/qemu-raspi4-deb
 Rules-Requires-Root: no
