@@ -2,11 +2,12 @@ name: "Build qemu-raspi4 .deb"
 
 # Build a .deb of the patched QEMU (Raspberry Pi 4 GENET + SD->emmc2) from the
 # razr/qemu fork source using a minimal in-repo debian/ and dpkg-buildpackage.
-# Builds ONLY qemu-system-aarch64 (the raspi4b emulator). Native build on the
-# ubuntu-24.04 runner (no container).
+# Builds ONLY qemu-system-aarch64 (the raspi4b emulator). Native build on both
+# amd64 (ubuntu-24.04) and arm64 (ubuntu-24.04-arm) runners — no container, no
+# cross-compile/emulation.
 #
 # - workflow_dispatch: build on demand.
-# - push tag v*: build and attach the .deb to a GitHub Release.
+# - push tag v*: build both arches and attach the .deb(s) to a GitHub Release.
 
 on:
   workflow_dispatch:
@@ -21,7 +22,16 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    name: "build (${{ matrix.arch }})"
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
     steps:
       - name: Checkout packaging repo
         uses: actions/checkout@v4
@@ -54,7 +64,7 @@ jobs:
       - name: Upload .deb artifact
         uses: actions/upload-artifact@v4
         with:
-          name: qemu-raspi4-deb
+          name: qemu-raspi4-deb-${{ matrix.arch }}
           path: out/*.deb
           if-no-files-found: error
 
