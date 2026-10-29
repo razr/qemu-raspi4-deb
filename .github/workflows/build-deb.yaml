@@ -1,0 +1,70 @@
+name: "Build qemu-raspi4 .deb"
+
+# Build a .deb of the patched QEMU (Raspberry Pi 4 GENET + SD->emmc2) by reusing
+# Debian's QEMU packaging on top of the razr/qemu fork source (dpkg-buildpackage).
+#
+# - workflow_dispatch: build on demand (pick distro, or "all" via the matrix).
+# - push tags v*: build all distros and attach the .deb(s) to a GitHub Release.
+
+on:
+  workflow_dispatch:
+    inputs:
+      distro:
+        description: "Container distro to build in"
+        required: true
+        default: "ubuntu-24.04"
+        type: choice
+        options:
+          - ubuntu-24.04
+          - debian-trixie
+          - elxr
+      qemu_ref:
+        description: "razr/qemu ref (branch or commit)"
+        required: false
+        default: "genet-rebased-sd"
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    name: "build (${{ matrix.distro }})"
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        # On tag push build every distro; on manual dispatch build only the chosen one.
+        distro: ${{ github.event_name == 'push' && fromJSON('["ubuntu-24.04","debian-trixie","elxr"]') || fromJSON(format('["{0}"]', inputs.distro)) }}
+    container:
+      image: ${{ fromJSON('{"ubuntu-24.04":"ubuntu:24.04","debian-trixie":"debian:trixie","elxr":"elxr/elxr:12"}')[matrix.distro] }}
+    steps:
+      - name: Checkout packaging repo
+        uses: actions/checkout@v4
+
+      - name: Build .deb
+        shell: bash
+        env:
+          QEMU_REF: ${{ inputs.qemu_ref || 'genet-rebased-sd' }}
+          DEBEMAIL: "ci@razr"
+          DEBFULLNAME: "razr qemu-raspi4-deb CI"
+        run: |
+          set -euo pipefail
+          # bootstrap just enough to run the script (it installs the rest)
+          apt-get update
+          apt-get install -y --no-install-recommends bash git ca-certificates \
+            build-essential devscripts equivs quilt dpkg-dev fakeroot
+          bash scripts/build-deb.sh
+
+      - name: Upload .deb artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: qemu-raspi4-deb-${{ matrix.distro }}
+          path: out/*.deb
+          if-no-files-found: error
+
+      - name: Attach .deb to Release (tag builds)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: out/*.deb
+          fail_on_unmatched_files: true
