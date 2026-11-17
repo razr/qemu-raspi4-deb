@@ -1,0 +1,89 @@
+name: "Build qemu-raspi4 .deb (arm64)"
+
+# Build a .deb of the patched QEMU (Raspberry Pi 4 GENET + SD->emmc2) from the
+# razr/qemu fork source using a minimal in-repo debian/ and dpkg-buildpackage.
+# Builds ONLY qemu-system-aarch64 (the raspi4b emulator). Native build on the
+# ubuntu-24.04-arm runner (arm64, no container); the amd64 build is build-deb.yaml.
+#
+# - workflow_dispatch: build on demand.
+# - push tag v*: build and attach the .deb to a GitHub Release.
+
+on:
+  workflow_dispatch:
+    inputs:
+      qemu_ref:
+        description: "razr/qemu ref (branch or commit)"
+        required: false
+        default: "genet-rebased-sd"
+  push:
+    tags:
+      - "v*"
+
+# Allow the tag build to attach the .deb to the GitHub Release
+# (softprops/action-gh-release needs contents: write).
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Checkout packaging repo
+        uses: actions/checkout@v4
+
+      - name: Install build tooling
+        run: |
+          sudo apt-get update
+          # Host tools per VxDocs qemu/raspberrypi/vxworks.md + Debian packaging.
+          # pixman/slirp come from QEMU's bundled meson subprojects (no -dev libs).
+          sudo apt-get install -y --no-install-recommends \
+            git curl ca-certificates build-essential debhelper devscripts libdistro-info-perl dpkg-dev fakeroot \
+            meson ninja-build gcc pkg-config device-tree-compiler python3 zlib1g-dev libglib2.0-dev
+
+      - name: Resolve QEMU source commit (for cache key)
+        id: qref
+        env:
+          QEMU_REF: ${{ inputs.qemu_ref || 'genet-rebased-sd' }}
+        run: |
+          SHA=$(git ls-remote https://github.com/razr/qemu "$QEMU_REF" | awk '{print $1}' | head -1)
+          [ -n "$SHA" ] || SHA="$QEMU_REF"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "QEMU source $QEMU_REF -> $SHA"
+
+      - name: Cache QEMU checkout
+        uses: actions/cache@v4
+        with:
+          path: work/qemu
+          # keyed on the resolved source commit: hit while the ref is unchanged,
+          # refetch when it moves.
+          key: qemu-src-arm64-${{ steps.qref.outputs.sha }}
+
+      - name: Build .deb
+        env:
+          QEMU_REF: ${{ inputs.qemu_ref || 'genet-rebased-sd' }}
+          DEBEMAIL: "ci@razr"
+          DEBFULLNAME: "razr qemu-raspi4-deb CI"
+        run: bash scripts/build-deb.sh
+
+      - name: Show the produced package
+        run: |
+          ls -l out/
+          for d in out/*.deb; do
+            echo "== $d =="
+            dpkg-deb -f "$d" Package Version Architecture Depends
+            echo "-- contents --"; dpkg-deb -c "$d"
+          done
+
+      - name: Upload .deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: qemu-raspi4-deb-arm64
+          path: out/*.deb
+          if-no-files-found: error
+
+      - name: Attach .deb to Release (tag builds)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: out/*.deb
+          fail_on_unmatched_files: true
