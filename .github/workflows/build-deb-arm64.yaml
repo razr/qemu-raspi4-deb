@@ -1,4 +1,5 @@
 name: "Build qemu-raspi4 .deb (arm64)"
+run-name: "qemu-raspi4 .deb arm64 ${{ github.ref_name }}"
 
 # Build a .deb of the patched QEMU (Raspberry Pi 4 GENET + SD->emmc2) from the
 # razr/qemu fork source using a minimal in-repo debian/ and dpkg-buildpackage.
