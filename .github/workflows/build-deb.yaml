@@ -1,7 +1,7 @@
 name: "Build qemu-raspi4 .deb"
 run-name: "qemu-raspi4 .deb amd64 ${{ github.ref_name }}"
 
-# Build a .deb of the patched QEMU (Raspberry Pi 4 GENET + SD->emmc2) from the
+# Build a .deb of the patched QEMU (Raspberry Pi 4 GENET + PCIe window + SD->emmc2) from the
 # razr/qemu fork source using a minimal in-repo debian/ and dpkg-buildpackage.
 # Builds ONLY qemu-system-aarch64 (the raspi4b emulator). Native build on the
 # ubuntu-24.04 runner (no container).
@@ -15,7 +15,7 @@ on:
       qemu_ref:
         description: "razr/qemu ref (branch or commit)"
         required: false
-        default: "genet-rebased-sd"
+        default: "raspi4b-vxworks"
   push:
     tags:
       - "v*"
@@ -44,7 +44,7 @@ jobs:
       - name: Resolve QEMU source commit (for cache key)
         id: qref
         env:
-          QEMU_REF: ${{ inputs.qemu_ref || 'genet-rebased-sd' }}
+          QEMU_REF: ${{ inputs.qemu_ref || 'raspi4b-vxworks' }}
         run: |
           SHA=$(git ls-remote https://github.com/razr/qemu "$QEMU_REF" | awk '{print $1}' | head -1)
           [ -n "$SHA" ] || SHA="$QEMU_REF"
@@ -61,7 +61,7 @@ jobs:
 
       - name: Build .deb
         env:
-          QEMU_REF: ${{ inputs.qemu_ref || 'genet-rebased-sd' }}
+          QEMU_REF: ${{ inputs.qemu_ref || 'raspi4b-vxworks' }}
           DEBEMAIL: "ci@razr"
           DEBFULLNAME: "razr qemu-raspi4-deb CI"
         run: bash scripts/build-deb.sh

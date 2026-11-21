@@ -2,17 +2,23 @@
 
 Builds a `.deb` of a **patched QEMU** that fixes Raspberry Pi 4 (`raspi4b` /
 BCM2838) board emulation, from the
-[`razr/qemu`](https://github.com/razr/qemu) fork (branch `genet-rebased-sd`).
+[`razr/qemu`](https://github.com/razr/qemu) fork (branch `raspi4b-vxworks`).
 
 These are **board-emulation fixes, not guest-OS specific** — any aarch64 guest on
 QEMU's `raspi4b` machine benefits:
 
-* **BCM2838 GENET** Ethernet model fixes (incl. the TX ring-enable fix), so the
-  on-board NIC works under emulation.
+* **BCM2838 GENET** Ethernet model fixes (single PHY on MDIO, TX descriptors
+  queued before ring enable, PDONE/BDONE interrupts, RBUF/TBUF status block
+  settings, BMCR soft reset, auto-negotiation delay, 1000BASE-T receiver
+  status), so the on-board NIC works under emulation.
+* **PCIe outbound window** at the PCI address the guest programs
+  (`MISC_CPU_2_PCIE_MEM_WIN0`), so devices behind the root port work, e.g.
+  `-device qemu-xhci,bus=pcie.1,msi=off,msix=off` + `usb-storage`.
 * **SD card routed to emmc2**, so emmc2-only guests (e.g. VxWorks) see the SD.
 
-The fix set originates from `robwoolley/qemu` (GENET) plus an SD→emmc2 commit,
-rebased onto QEMU 11.1-dev (`VERSION` = `11.0.90`).
+The branch is upstream QEMU master (which has the raspi4b PCIe and GENET
+models, `VERSION` = `11.1.91`) plus these fixes; the GENET ones originate from
+`robwoolley/qemu`.
 
 ## Why this exists
 
@@ -33,13 +39,13 @@ A single-target, lean package:
 * Does **not** shadow the distro's own `qemu-system-aarch64`.
 
 Package: `qemu-raspi4`, version `<qemu-version>+raspi4genet.<short-sha>`
-(e.g. `11.0.90+raspi4genet.c1359c9`).
+(e.g. `11.1.91+raspi4genet.5a1683d`).
 
 ## How it works (no hand-maintained upstream packaging)
 
 `scripts/build-deb.sh`:
 
-1. Clones the patched source: `razr/qemu @ genet-rebased-sd` (no submodules — a
+1. Clones the patched source: `razr/qemu @ raspi4b-vxworks` (no submodules — a
    single aarch64 target needs no bundled firmware ROMs).
 2. Drops in this repo's minimal `debian/` (control + rules), generates a
    `debian/changelog` recording the source commit.
@@ -116,6 +122,6 @@ qemu-system-aarch64-raspi4 -machine raspi4b -m 2048 \
 
 | Thing | Value |
 |-------|-------|
-| QEMU source | `razr/qemu` branch `genet-rebased-sd` (`VERSION` 11.0.90) |
+| QEMU source | `razr/qemu` branch `raspi4b-vxworks` (`VERSION` 11.1.91) |
 | Target | `aarch64-softmmu` only |
 | Build host | `ubuntu-24.04` (native) |

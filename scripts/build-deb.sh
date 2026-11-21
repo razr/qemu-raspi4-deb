@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # build-deb.sh — build a single-target (aarch64-softmmu) .deb of the patched QEMU
-# (Raspberry Pi 4 GENET + SD->emmc2) using a minimal in-repo debian/.
+# (Raspberry Pi 4 GENET + PCIe window + SD->emmc2) using a minimal in-repo debian/.
 #
 # We build ONLY the aarch64 system target (what raspi4b needs), so Debian's
 # multi-target packaging is not reused; a small debian/ (control+rules) ships one
@@ -10,7 +10,7 @@
 set -euo pipefail
 
 QEMU_REPO="${QEMU_REPO:-https://github.com/razr/qemu}"
-QEMU_REF="${QEMU_REF:-genet-rebased-sd}"          # branch or commit
+QEMU_REF="${QEMU_REF:-raspi4b-vxworks}"          # branch or commit
 VENDOR_SUFFIX="${VENDOR_SUFFIX:-raspi4genet}"
 
 PKGDIR="$(cd "$(dirname "$0")/.." && pwd)"         # repo root (has debian/)
@@ -65,7 +65,7 @@ rm -f debian/changelog
 DEBEMAIL="${DEBEMAIL:-ci@razr}" DEBFULLNAME="${DEBFULLNAME:-razr qemu-raspi4-deb CI}" \
   dch --create --package qemu-raspi4 --newversion "$PKG_VER" \
       --distribution "$CODENAME" \
-      "Single-target aarch64 build from razr/qemu@${SRC_SHA} (${QEMU_REF}): BCM2838 GENET networking fixes (incl. TX ring-enable) and SD->emmc2 routing for the raspi4b machine."
+      "Single-target aarch64 build from razr/qemu@${SRC_SHA} (${QEMU_REF}): BCM2838 GENET networking fixes, PCIe outbound window and SD->emmc2 routing for the raspi4b machine."
 
 log "dpkg-buildpackage -b (binary only)"
 export DEB_BUILD_OPTIONS="${DEB_BUILD_OPTIONS:-nocheck parallel=$(nproc)}"
